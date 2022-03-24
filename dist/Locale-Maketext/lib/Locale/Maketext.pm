@@ -25,7 +25,7 @@ BEGIN {
 }
 
 
-our $VERSION = '1.30';
+our $VERSION = '1.29';
 our @ISA = ();
 
 our $MATCH_SUPERS = 1;
@@ -136,20 +136,19 @@ sub fail_with { # an actual attribute method!
 
 #--------------------------------------------------------------------------
 
-sub _exclude {
-    my ( $handle, @methods  ) = @_;
+sub blacklist {
+    my ( $handle, @methods ) = @_;
 
-    unless ( defined $handle->{'denylist'} ) {
+    unless ( defined $handle->{'blacklist'} ) {
         no strict 'refs';
 
         # Don't let people call methods they're not supposed to from maketext.
         # Explicitly exclude all methods in this package that start with an
         # underscore on principle.
-        $handle->{'denylist'} = {
+        $handle->{'blacklist'} = {
             map { $_ => 1 } (
                 qw/
                   blacklist
-                  denylist
                   encoding
                   fail_with
                   failure_handler_auto
@@ -161,37 +160,13 @@ sub _exclude {
                   maketext
                   new
                   whitelist
-                  allowlist
                   /, grep { /^_/ } keys %{ __PACKAGE__ . "::" }
             ),
         };
     }
 
     if ( scalar @methods ) {
-        $handle->{'denylist'} = { %{ $handle->{'denylist'} }, map { $_ => 1 } @methods };
-    }
-
-    delete $handle->{'_external_lex_cache'};
-    return;
-}
-
-sub blacklist {
-    my ( $handle, @methods  ) = @_; 
-    _exclude ( $handle, @methods );
-    return;
-}
-
-sub denylist {
-    my ( $handle, @methods  ) = @_; 
-    _exclude ( $handle, @methods );
-    return;
-}
-
-sub _include {
-    my ( $handle, @methods ) = @_;
-    if ( scalar @methods ) {
-        $handle->{'allowlist'} = {} unless defined $handle->{'allowlist'};
-        $handle->{'allowlist'} = { %{ $handle->{'allowlist'} }, map { $_ => 1 } @methods };
+        $handle->{'blacklist'} = { %{ $handle->{'blacklist'} }, map { $_ => 1 } @methods };
     }
 
     delete $handle->{'_external_lex_cache'};
@@ -199,14 +174,13 @@ sub _include {
 }
 
 sub whitelist {
-    my ( $handle, @methods  ) = @_; 
-    _include ( $handle, @methods );
-    return;
-}
+    my ( $handle, @methods ) = @_;
+    if ( scalar @methods ) {
+        $handle->{'whitelist'} = {} unless defined $handle->{'whitelist'};
+        $handle->{'whitelist'} = { %{ $handle->{'whitelist'} }, map { $_ => 1 } @methods };
+    }
 
-sub allowlist {
-    my ( $handle, @methods  ) = @_; 
-    _include ( $handle, @methods );
+    delete $handle->{'_external_lex_cache'};
     return;
 }
 
@@ -254,7 +228,6 @@ sub new {
     my $class = ref($_[0]) || $_[0];
     my $handle = bless {}, $class;
     $handle->blacklist;
-    $handle->denylist;
     $handle->init;
     return $handle;
 }
@@ -706,10 +679,8 @@ sub _compile {
                     }
                     elsif($m =~ /^\w+$/s
                         && !$handle->{'blacklist'}{$m}
-                        && !$handle->{'denylist'}{$m}
                         && ( !defined $handle->{'whitelist'} || $handle->{'whitelist'}{$m} )
-                        && ( !defined $handle->{'allowlist'} || $handle->{'allowlist'}{$m} )
-                        # exclude anything fancy and restrict to the allowlist/denylist (and historical whitelist/blacklist).
+                        # exclude anything fancy and restrict to the whitelist/blacklist.
                     ) {
                         push @code, ' $_[0]->' . $m . '(';
                     }
